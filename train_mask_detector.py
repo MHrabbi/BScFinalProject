@@ -1,27 +1,26 @@
 import os
 import numpy as np
 import matplotlib.pyplot as plt
-from sklearn.preprocessing import LabelBinarizer
-from sklearn.model_selection import train_test_split
-from sklearn.metrics import classification_report
-from tensorflow.keras.preprocessing.image import ImageDataGenerator
-from tensorflow.keras.applications import MobileNetV2
 from tensorflow.keras.layers import AveragePooling2D
 from tensorflow.keras.layers import Dropout
 from tensorflow.keras.layers import Flatten
 from tensorflow.keras.layers import Dense
 from tensorflow.keras.layers import Input
 from tensorflow.keras.models import Model
+from sklearn.preprocessing import LabelBinarizer
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import classification_report
 from tensorflow.keras.optimizers import Adam
+from tensorflow.keras.applications import MobileNetV2
 from tensorflow.keras.applications.mobilenet_v2 import preprocess_input
 from tensorflow.keras.preprocessing.image import img_to_array
 from tensorflow.keras.preprocessing.image import load_img
+from tensorflow.keras.preprocessing.image import ImageDataGenerator
 from tensorflow.keras.utils import to_categorical
 
-
-INIT_LR = 1e-4 # Initial learning rate
-EPOCHS = 20 #'number of epochs'
-BS = 32 #Batch Size
+INIT_LR = 0.0001  # Initial learning rate
+EPOCHS = 20  # 'number of epochs'
+BS = 32  # Batch Size
 
 DIRECTORY = r"D:\MIU\12th sem\Final Project\face-mask-detector\dataset"
 Classes = ["with_mask", "without_mask"]
@@ -30,17 +29,18 @@ print("[INFO] loading images...")
 
 data = []
 labels = []
+
 # grab images from dataset directory, initialize the list of data and class images
 for Class in Classes:
     path = os.path.join(DIRECTORY, Class)
     for img in os.listdir(path):
-    	img_path = os.path.join(path, img)
-    	image = load_img(img_path, target_size=(224, 224))
-    	image = img_to_array(image)
-    	image = preprocess_input(image)
+        img_path = os.path.join(path, img)
+        image = load_img(img_path, target_size=(224, 224))
+        image = img_to_array(image)
+        image = preprocess_input(image)
 
-    	data.append(image)
-    	labels.append(Class)
+        data.append(image)
+        labels.append(Class)
 
 # perform encoding on labels
 lb = LabelBinarizer()
@@ -50,22 +50,20 @@ labels = to_categorical(labels)
 data = np.array(data, dtype="float32")
 labels = np.array(labels)
 
-(trainX, testX, trainY, testY) = train_test_split(data, labels,
-	test_size=0.20, stratify=labels, random_state=45)
+(trainX, testX, trainY, testY) = train_test_split(data, labels, test_size=0.20, stratify=labels, random_state=45)
 
 # training image generator for data augmentation
 aug = ImageDataGenerator(
-	rotation_range=20,
-	zoom_range=0.15,
-	width_shift_range=0.2,
-	height_shift_range=0.2,
-	shear_range=0.15,
-	horizontal_flip=True,
-	fill_mode="nearest")
+    rotation_range=20,
+    zoom_range=0.15,
+    width_shift_range=0.2,
+    height_shift_range=0.2,
+    shear_range=0.15,
+    horizontal_flip=True,
+    fill_mode="nearest")
 
 # loading the MobileNetV2 network, ensuring the head FC layer sets are left off
-baseModel = MobileNetV2(weights="imagenet", include_top=False,
-	input_tensor=Input(shape=(224, 224, 3)))
+baseModel = MobileNetV2(weights="imagenet", include_top=False, input_tensor=Input(shape=(224, 224, 3)))
 
 # head model placed on top of the the base model
 head_model = baseModel.output
@@ -80,33 +78,31 @@ model = Model(inputs=baseModel.input, outputs=head_model)
 
 # loop all layers in the base model to freeze them for first training process
 for layer in baseModel.layers:
-	layer.trainable = False
+    layer.trainable = False
 
 # compiling model
 print("[INFO] compiling model...")
 opt = Adam(lr=INIT_LR, decay=INIT_LR / EPOCHS)
-model.compile(loss="binary_crossentropy", optimizer=opt,
-	metrics=["accuracy"])
+model.compile(loss="binary_crossentropy", optimizer=opt, metrics=["accuracy"])
 
 # training head of network
 print("[INFO] training head...")
 H = model.fit(
-	aug.flow(trainX, trainY, batch_size=BS),
-	steps_per_epoch=len(trainX) // BS,
-	validation_data=(testX, testY),
-	validation_steps=len(testX) // BS,
-	epochs=EPOCHS)
+    aug.flow(trainX, trainY, batch_size=BS),
+    steps_per_epoch=len(trainX) // BS,
+    validation_data=(testX, testY),
+    validation_steps=len(testX) // BS,
+    epochs=EPOCHS)
 
 # testing set prediction
 print("[INFO] evaluating network....")
-predIdxs = model.predict(testX, batch_size=BS)
+pred = model.predict(testX, batch_size=BS)
 
 # index of the label with largest predicted probability for each image
-predIdxs = np.argmax(predIdxs, axis=1)
+pred = np.argmax(pred, axis=1)
 
 # classification report
-print(classification_report(testY.argmax(axis=1), predIdxs,
-	target_names=lb.classes_))
+print(classification_report(testY.argmax(axis=1), pred, target_names=lb.classes_))
 
 # saving the model to disk
 print("[INFO] saving mask model...")
